@@ -58,6 +58,18 @@
     "presale-close": "hardhat run scripts/5_presale_close.ts",
     "public-sale-open": "hardhat run scripts/6_public_sale_open.ts",
     "public-sale-close": "hardhat run scripts/7_public_sale_close.ts",
+    "withdraw": "hardhat run scripts/withdraw.ts",
+    "set-uri-prefix": "hardhat run scripts/set_uri_prefix.ts",
+    "get-royalty-info": "hardhat run scripts/get_royalty_info.ts",
+    "get-base-uri": "hardhat run scripts/get_base_uri.ts",
+    "set-royalty-receiver": "hardhat run scripts/set_royalty_receiver.ts",
+    "get-withdraw-receiver": "hardhat run scripts/get_withdraw_receiver.ts",
+    "set-withdraw-receiver": "hardhat run scripts/set_withdraw_receiver.ts",
+    "set-cost": "hardhat run scripts/set_cost.ts",
+    "set-paused": "hardhat run scripts/set_paused.ts",
     "reveal": "hardhat run scripts/8_reveal.ts"
+  },
+  "dependencies": {
+    "operator-filter-registry": "^1.4.1"
   }
 }
