@@ -18,7 +18,7 @@ dotenv.config();
  * and faster, then you can update the followind value.
  * This value is used by default in any network defined in this project, but
  * please make sure to add it manually if you define any custom network.
- * 
+ *
  * Example:
  * Setting the value to "1.1" will raise the gas values by 10% compared to the
  * estimated value.
@@ -102,7 +102,7 @@ task('rename-contract', 'Renames the smart contract replacing all occurrences in
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: '0.8.9',
+    version: '0.8.13',
     settings: {
       optimizer: {
         enabled: true,
@@ -157,7 +157,7 @@ if (process.env.NETWORK_MAINNET_URL !== undefined) {
 export default config;
 
 /**
- * Replaces all occurrences of a string in the given file. 
+ * Replaces all occurrences of a string in the given file.
  */
 function replaceInFile(file: string, search: string, replace: string): void
 {
