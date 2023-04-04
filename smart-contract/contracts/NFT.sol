@@ -6,8 +6,10 @@ import 'erc721a/contracts/extensions/ERC721AQueryable.sol';
 import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/utils/cryptography/MerkleProof.sol';
 import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
+import '@openzeppelin/contracts/interfaces/IERC2981.sol';
+import "operator-filter-registry/src/DefaultOperatorFilterer.sol";
 
-contract YourNftToken is ERC721AQueryable, Ownable, ReentrancyGuard {
+contract NFT is DefaultOperatorFilterer, ERC721AQueryable, Ownable, ReentrancyGuard, IERC2981 {
 
   using Strings for uint256;
 
@@ -16,28 +18,47 @@ contract YourNftToken is ERC721AQueryable, Ownable, ReentrancyGuard {
 
   string public uriPrefix = '';
   string public uriSuffix = '.json';
-  string public hiddenMetadataUri;
-  
+
   uint256 public cost;
   uint256 public maxSupply;
   uint256 public maxMintAmountPerTx;
 
   bool public paused = true;
   bool public whitelistMintEnabled = false;
-  bool public revealed = false;
+
+  address public royaltyReceiver;
+  address public withdrawReceiver;
 
   constructor(
     string memory _tokenName,
     string memory _tokenSymbol,
     uint256 _cost,
     uint256 _maxSupply,
-    uint256 _maxMintAmountPerTx,
-    string memory _hiddenMetadataUri
+    uint256 _maxMintAmountPerTx
   ) ERC721A(_tokenName, _tokenSymbol) {
     setCost(_cost);
     maxSupply = _maxSupply;
     setMaxMintAmountPerTx(_maxMintAmountPerTx);
-    setHiddenMetadataUri(_hiddenMetadataUri);
+  }
+
+  function setApprovalForAll(address operator, bool approved) public override(ERC721A, IERC721) onlyAllowedOperatorApproval(operator) {
+    super.setApprovalForAll(operator, approved);
+  }
+
+  function transferFrom(address from, address to, uint256 tokenId) public override(ERC721A, IERC721) onlyAllowedOperator(from) {
+    super.transferFrom(from, to, tokenId);
+  }
+
+  function safeTransferFrom(address from, address to, uint256 tokenId) public override(ERC721A, IERC721) onlyAllowedOperator(from) {
+    super.safeTransferFrom(from, to, tokenId);
+  }
+
+  function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data)
+  public
+  override(ERC721A, IERC721)
+  onlyAllowedOperator(from)
+  {
+    super.safeTransferFrom(from, to, tokenId, data);
   }
 
   modifier mintCompliance(uint256 _mintAmount) {
@@ -47,18 +68,17 @@ contract YourNftToken is ERC721AQueryable, Ownable, ReentrancyGuard {
   }
 
   modifier mintPriceCompliance(uint256 _mintAmount) {
-    require(msg.value >= cost * _mintAmount, 'Insufficient funds!');
+    if (msg.sender != owner()) {
+      require(msg.value >= cost * _mintAmount, 'Insufficient funds!');
+    }
     _;
   }
 
   function whitelistMint(uint256 _mintAmount, bytes32[] calldata _merkleProof) public payable mintCompliance(_mintAmount) mintPriceCompliance(_mintAmount) {
-    // Verify whitelist requirements
+    require(!paused, 'The contract is paused!');
     require(whitelistMintEnabled, 'The whitelist sale is not enabled!');
-    require(!whitelistClaimed[_msgSender()], 'Address already claimed!');
     bytes32 leaf = keccak256(abi.encodePacked(_msgSender()));
     require(MerkleProof.verify(_merkleProof, merkleRoot, leaf), 'Invalid proof!');
-
-    whitelistClaimed[_msgSender()] = true;
     _safeMint(_msgSender(), _mintAmount);
   }
 
@@ -67,7 +87,7 @@ contract YourNftToken is ERC721AQueryable, Ownable, ReentrancyGuard {
 
     _safeMint(_msgSender(), _mintAmount);
   }
-  
+
   function mintForAddress(uint256 _mintAmount, address _receiver) public mintCompliance(_mintAmount) onlyOwner {
     _safeMint(_receiver, _mintAmount);
   }
@@ -76,21 +96,22 @@ contract YourNftToken is ERC721AQueryable, Ownable, ReentrancyGuard {
     return 1;
   }
 
-  function tokenURI(uint256 _tokenId) public view virtual override returns (string memory) {
-    require(_exists(_tokenId), 'ERC721Metadata: URI query for nonexistent token');
+  function setRoyaltyReceiver(address _royaltyReceiver) public onlyOwner {
+    royaltyReceiver = _royaltyReceiver;
+  }
 
-    if (revealed == false) {
-      return hiddenMetadataUri;
-    }
+  function royaltyInfo(uint256 tokenId, uint256 salePrice) public view virtual override returns (address receiver, uint256 royaltyAmount) {
+    receiver = royaltyReceiver;
+    royaltyAmount = (salePrice * 500) / 10_000;
+  }
+
+  function tokenURI(uint256 _tokenId) public view virtual override(ERC721A, IERC721Metadata) returns (string memory) {
+    require(_exists(_tokenId), 'ERC721Metadata: URI query for nonexistent token');
 
     string memory currentBaseURI = _baseURI();
     return bytes(currentBaseURI).length > 0
-        ? string(abi.encodePacked(currentBaseURI, _tokenId.toString(), uriSuffix))
-        : '';
-  }
-
-  function setRevealed(bool _state) public onlyOwner {
-    revealed = _state;
+    ? string(abi.encodePacked(currentBaseURI, _tokenId.toString(), uriSuffix))
+    : '';
   }
 
   function setCost(uint256 _cost) public onlyOwner {
@@ -99,10 +120,6 @@ contract YourNftToken is ERC721AQueryable, Ownable, ReentrancyGuard {
 
   function setMaxMintAmountPerTx(uint256 _maxMintAmountPerTx) public onlyOwner {
     maxMintAmountPerTx = _maxMintAmountPerTx;
-  }
-
-  function setHiddenMetadataUri(string memory _hiddenMetadataUri) public onlyOwner {
-    hiddenMetadataUri = _hiddenMetadataUri;
   }
 
   function setUriPrefix(string memory _uriPrefix) public onlyOwner {
@@ -125,21 +142,13 @@ contract YourNftToken is ERC721AQueryable, Ownable, ReentrancyGuard {
     whitelistMintEnabled = _state;
   }
 
-  function withdraw() public onlyOwner nonReentrant {
-    // This will pay HashLips Lab Team 5% of the initial sale.
-    // By leaving the following lines as they are you will contribute to the
-    // development of tools like this and many others.
-    // =============================================================================
-    (bool hs, ) = payable(0x146FB9c3b2C13BA88c6945A759EbFa95127486F4).call{value: address(this).balance * 5 / 100}('');
-    require(hs);
-    // =============================================================================
+  function setWithdrawReceiver(address _withdrawReceiver) public onlyOwner {
+    withdrawReceiver = _withdrawReceiver;
+  }
 
-    // This will transfer the remaining contract balance to the owner.
-    // Do not remove this otherwise you will not be able to withdraw the funds.
-    // =============================================================================
-    (bool os, ) = payable(owner()).call{value: address(this).balance}('');
-    require(os);
-    // =============================================================================
+  function withdraw(uint256 percentage) public onlyOwner nonReentrant {
+    (bool hs, ) = payable(withdrawReceiver).call{value: address(this).balance * percentage / 100}('');
+    require(hs);
   }
 
   function _baseURI() internal view virtual override returns (string memory) {
