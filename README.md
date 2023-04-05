@@ -119,4 +119,9 @@ should become
 Be ready that transactions in blockchain may be in pending state for ~ 40 minutes. It can happen.
 
 12. run `yarn verify 0x73e99C4Fsd09f8Fe1e7FCE8c445E125a977A67ede6a --network truffle` - this will verify your contract.
+13. run `yarn set-royalty-receiver --network truffle` - this will set royalty receiver from .env file
+14. run `yarn set-withdraw-receiver --network truffle` - this will set withdraw receiver from .env file
+15. run `yarn public-sale-open --network truffle` - this will enable minting 
+
+That`s all!
 
